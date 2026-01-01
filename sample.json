@@ -1,0 +1,28 @@
+{
+  "title": "Python Basics Quiz",
+  "time_limit": 300,
+  "questions": [
+    {
+      "id": 1,
+      "question": "Python'da list qaysi belgilar bilan yoziladi?",
+      "options": [
+        "()", 
+        "{}", 
+        "[]", 
+        "<>"
+      ],
+      "answer": 2
+    },
+    {
+      "id": 2,
+      "question": "print(type(5)) nimani chiqaradi?",
+      "options": [
+        "str",
+        "int",
+        "float",
+        "bool"
+      ],
+      "answer": 1
+    }
+  ]
+}
