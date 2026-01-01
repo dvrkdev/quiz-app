@@ -1,25 +1,22 @@
 {% extends "base.html" %}
 {% block title %}Result{% endblock %}
-
 {% block content %}
-<div class="row">
-    <div class="col-md-8 offset-md-2">
-        <h2>{{ quiz.title }} Results</h2>
-        <p>Your score: {{ score }} / {{ total }}</p>
-
-        <ul class="list-group">
-        {% for q in quiz.questions %}
-            <li class="list-group-item">
-                <strong>{{ loop.index }}. {{ q.text }}</strong><br>
-                Correct answer:
-                {% for opt in q.options %}
-                    {% if opt.is_correct %}
-                        {{ opt.text }}
-                    {% endif %}
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <h2>{{ quiz.title }} Results</h2>
+            <p>Your score: {{ score }} / {{ total }}</p>
+            <ul class="list-group">
+                {% for q in quiz.questions %}
+                    <li class="list-group-item">
+                        <strong>{{ loop.index }}. {{ q.text }}</strong>
+                        <br>
+                        Correct answer:
+                        {% for opt in q.options %}
+                            {% if opt.is_correct %}{{ opt.text }}{% endif %}
+                        {% endfor %}
+                    </li>
                 {% endfor %}
-            </li>
-        {% endfor %}
-        </ul>
+            </ul>
+        </div>
     </div>
-</div>
 {% endblock %}
