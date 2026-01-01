@@ -3,7 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import FlaskForm, CSRFProtect
 from flask_bootstrap import Bootstrap5
 from wtforms import FileField, SubmitField
-from wtforms.validators import DataRequired, ValidationError
+from flask_wtf.file import FileRequired, FileAllowed
 import re
 import os
 
@@ -24,13 +24,14 @@ bootstrap5 = Bootstrap5(app)
 
 
 class QuizFileForm(FlaskForm):
-    file = FileField("Select JSON file", validators=[DataRequired()])
+    file = FileField(
+        "Select JSON file",
+        validators=[
+            FileRequired(),
+            FileAllowed(["json"], message="Only JSON files are allowed."),
+        ],
+    )
     submit = SubmitField("Start Quiz")
-
-    def validate_file(self, field):
-        filename = field.data.filename
-        if not re.match(r"^.*\.json$", filename, re.IGNORECASE):
-            raise ValidationError("Only JSON files are allowed.")
 
 
 @app.route("/", methods=["POST", "GET"])
