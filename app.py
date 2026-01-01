@@ -1,10 +1,11 @@
-from flask import Flask, render_template, flash, redirect, url_for
+from flask import Flask, render_template, flash, redirect, url_for, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import FlaskForm, CSRFProtect
 from flask_bootstrap import Bootstrap5
-from wtforms import FileField, SubmitField
+from wtforms import FileField, SubmitField, RadioField
 from flask_wtf.file import FileRequired, FileAllowed
 from werkzeug.utils import secure_filename
+from wtforms.validators import DataRequired
 import os
 import json
 
@@ -20,13 +21,14 @@ app.config.update(
     MAX_CONTENT_LENGTH=2 * 1024 * 1024,  # 2MB limit
 )
 
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
 db = SQLAlchemy(app)
 csrf = CSRFProtect(app)
 bootstrap5 = Bootstrap5(app)
 
 
+# ===== MODELS =====
 class QuizFileForm(FlaskForm):
     file = FileField(
         "Select JSON file",
@@ -66,9 +68,23 @@ class Option(db.Model):
     is_correct = db.Column(db.Boolean, default=False, nullable=False)
 
 
+class UserAnswer(db.Model):
+    __tablename__ = "user_answers"
+    id = db.Column(db.Integer, primary_key=True)
+    quiz_id = db.Column(db.Integer, db.ForeignKey("quiz.id"), nullable=False)
+    question_id = db.Column(db.Integer, db.ForeignKey("questions.id"), nullable=False)
+    selected_option_id = db.Column(
+        db.Integer, db.ForeignKey("options.id"), nullable=False
+    )
+
+
+# ===== HELPERS =====
 def validate_quiz_json(data):
     if not isinstance(data, dict):
         raise ValueError("Root must be an object")
+
+    if "title" not in data:
+        raise ValueError("Quiz must have a title")
 
     if "questions" not in data or not isinstance(data["questions"], list):
         raise ValueError("questions must be a list")
@@ -104,33 +120,78 @@ def save_quiz_to_db(data):
 
     db.session.add(quiz)
     db.session.commit()
-
     return quiz.id
 
 
+def create_quiz_form(quiz):
+    class DynamicQuizForm(FlaskForm):
+        submit = SubmitField("Submit Quiz")
+
+    for q in quiz.questions:
+        choices = [(str(opt.id), opt.text) for opt in q.options]
+        setattr(
+            DynamicQuizForm,
+            f"question_{q.id}",
+            RadioField(
+                q.text, choices=choices, validators=[DataRequired()], coerce=str
+            ),
+        )
+
+    return DynamicQuizForm()
+
+
+# ===== ROUTES =====
 @app.route("/", methods=["POST", "GET"])
 def index():
     form = QuizFileForm()
     if form.validate_on_submit():
         file = form.file.data
-        filename = secure_filename(file.filename)  # secure filename
+        filename = secure_filename(file.filename)
         filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         try:
-            file.save(filepath)  # save file to upload path
-            # check the JSON file
+            file.save(filepath)
             with open(filepath, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            # check the JSON file structure
             validate_quiz_json(data)
-            # save to the database
             quiz_id = save_quiz_to_db(data)
             flash(f"Quiz uploaded successfully! ID={quiz_id}", "success")
         except json.JSONDecodeError:
             flash("Invalid JSON file", "danger")
+        except ValueError as e:
+            flash(str(e), "danger")
+        except Exception as e:
+            flash(f"Unexpected error: {str(e)}", "danger")
         finally:
             if os.path.exists(filepath):
                 os.remove(filepath)
     return render_template("index.html", form=form)
+
+
+@app.route("/quiz/<int:quiz_id>", methods=["GET", "POST"])
+def quiz(quiz_id):
+    quiz = Quiz.query.get_or_404(quiz_id)
+    form = create_quiz_form(quiz)
+
+    if form.validate_on_submit():
+        score = 0
+        total = len(quiz.questions)
+
+        for q in quiz.questions:
+            field_name = f"question_{q.id}"
+            selected_option_id = int(form[field_name].data)
+            option = Option.query.get(selected_option_id)
+            if option.is_correct:
+                score += 1
+            answer = UserAnswer(
+                quiz_id=quiz.id, question_id=q.id, selected_option_id=selected_option_id
+            )
+            db.session.add(answer)
+
+        db.session.commit()
+        flash(f"You scored {score}/{total}!", "success")
+        return render_template("result.html", quiz=quiz, score=score, total=total)
+
+    return render_template("quiz.html", form=form, quiz=quiz)
 
 
 if __name__ == "__main__":
